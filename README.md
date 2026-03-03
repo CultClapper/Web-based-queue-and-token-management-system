@@ -1,6 +1,3 @@
-
-
-# File: C:\Users\Adith\Desktop\ServSync\ARCHITECTURE.md
 # ServSync Architecture & Data Flow
 
 ## 🏗️ System Architecture
