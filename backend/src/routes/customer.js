@@ -201,23 +201,55 @@ router.get('/requests/operator/completed-history', async (req, res, next) => {
   }
 });
 
-// Accept a service request (operator accepts task)
+// Accept a service request (operator claims task but does not start timer)
 router.patch('/requests/:id/accept', async (req, res, next) => {
   try {
-    const request = await ServiceRequest.findByIdAndUpdate(
-      req.params.id,
-      {
-        status: 'in-progress',
-        assignedOperator: req.user._id,
-        startedAt: new Date()
-      },
-      { new: true }
-    ).populate('createdBy', 'name email').populate('assignedOperator', 'name email');
-
+    const request = await ServiceRequest.findById(req.params.id);
     if (!request) {
       return res.status(404).json({ message: 'Service request not found' });
     }
 
+    // assign operator and keep status in-progress so it shows up in the queue
+    request.assignedOperator = req.user._id;
+    request.status = 'in-progress';
+    request.assignedAt = new Date();
+
+    // figure expected duration using a hardcoded mapping (mirrors frontend)
+    const DURATION_MAP = {
+      basic: 15,
+      standard: 30,
+      premium: 45,
+      detail: 60
+    };
+    request.expectedDurationMinutes = DURATION_MAP[request.service] || 30;
+
+    await request.save();
+    await request.populate('createdBy', 'name email');
+    await request.populate('assignedOperator', 'name email');
+
+    res.json(request);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Start work on a service request (operator begins timer)
+router.patch('/requests/:id/start', async (req, res, next) => {
+  try {
+    const request = await ServiceRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: 'Service request not found' });
+    }
+    if (!request.assignedOperator || request.assignedOperator.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Only assigned operator can start this task' });
+    }
+    if (request.startedAt) {
+      return res.status(400).json({ message: 'Task already started' });
+    }
+    request.startedAt = new Date();
+    await request.save();
+    await request.populate('createdBy', 'name email');
+    await request.populate('assignedOperator', 'name email');
     res.json(request);
   } catch (e) {
     next(e);
@@ -228,20 +260,27 @@ router.patch('/requests/:id/accept', async (req, res, next) => {
 router.patch('/requests/:id/complete', async (req, res, next) => {
   try {
     const { operatorNotes } = req.body;
-    
-    const request = await ServiceRequest.findByIdAndUpdate(
-      req.params.id,
-      { 
-        status: 'completed',
-        completedAt: new Date(),
-        operatorNotes
-      },
-      { new: true }
-    ).populate('createdBy', 'name email').populate('assignedOperator', 'name email');
-
+    const now = new Date();
+    const request = await ServiceRequest.findById(req.params.id);
     if (!request) {
       return res.status(404).json({ message: 'Service request not found' });
     }
+    request.status = 'completed';
+    request.completedAt = now;
+    request.operatorNotes = operatorNotes;
+
+    // calculate work duration and delay
+    if (request.startedAt) {
+      const durationMs = now - request.startedAt;
+      request.workDurationMinutes = durationMs / 60000;
+      if (request.expectedDurationMinutes != null) {
+        request.delayMinutes = Math.max(0, request.workDurationMinutes - request.expectedDurationMinutes);
+      }
+    }
+
+    await request.save();
+    await request.populate('createdBy', 'name email');
+    await request.populate('assignedOperator', 'name email');
 
     // Update operator stats
     if (request.assignedOperator) {

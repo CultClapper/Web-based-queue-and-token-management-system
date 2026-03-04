@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import { MdTimer, MdCheck, MdPlayArrow, MdBarChart, MdAssignment, MdConfirmationNumber, MdPerson, MdEdit, MdDeleteOutline, MdClose, MdLogout } from 'react-icons/md';
+import LiveTimer from '../components/LiveTimer';
+import LiveProgress from '../components/LiveProgress';
+
+const SERVICE_DURATIONS = {
+  basic: 15,
+  standard: 30,
+  premium: 45,
+  detail: 60
+};
+
 
 const SERVICES = [
   { id: 'basic', name: 'Basic Wash', price: 299, duration: '15 mins' },
@@ -22,12 +33,14 @@ export default function CustomerDashboard() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
+  const [notification, setNotification] = useState('');
   const [queueStatus, setQueueStatus] = useState(null);
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [customerRecentTask, setCustomerRecentTask] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [editFormData, setEditFormData] = useState({ vehicle: '', phone: '', company: '', service: '' });
   const [editLoading, setEditLoading] = useState(false);
+  const prevStatus = React.useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -53,6 +66,12 @@ export default function CustomerDashboard() {
     try {
       setLoadingQueue(true);
       const response = await client.get('/customer/queue-status');
+      // notify customer when status updates
+      if (prevStatus.current && prevStatus.current.status !== response.data.status) {
+        setNotification(`Your request status is now ${response.data.status}`);
+        setTimeout(() => setNotification(''), 5000);
+      }
+      prevStatus.current = response.data;
       setQueueStatus(response.data);
     } catch (error) {
       console.error('Error fetching queue status:', error);
@@ -142,31 +161,33 @@ export default function CustomerDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
-      {/* Global navigation */}
-      <header className="sticky top-0 z-30 bg-gradient-to-r from-blue-900 via-indigo-900 to-purple-900 text-slate-50">
+      {/* Global navigation / brand */}
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-500 text-sm font-bold shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-xs font-semibold tracking-[0.15em] text-white shadow-lg">
               SS
             </div>
             <div className="leading-tight">
               <p className="text-sm font-semibold text-slate-50">ServSync</p>
-              <p className="text-[11px] text-slate-400">Customer Portal</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                Customer Portal
+              </p>
             </div>
           </div>
-          <nav className="hidden items-center gap-5 text-xs font-medium text-slate-300 md:flex">
-            <button className="relative text-slate-50">
-              Home
-              <span className="absolute -bottom-1 left-0 h-[2px] w-6 rounded-full bg-slate-50" />
-            </button>
-            <button className="hover:text-slate-50">Services</button>
-            <button className="hover:text-slate-50">Support</button>
+          <nav className="hidden items-center gap-6 text-xs font-medium text-slate-300 md:flex">
+            <span className="relative text-slate-50">
+              Overview
+              <span className="absolute -bottom-1 left-0 h-[2px] w-6 rounded-full bg-indigo-400" />
+            </span>
+            <span className="hover:text-slate-50">Services</span>
+            <span className="hover:text-slate-50">Support</span>
           </nav>
           <div className="flex items-center gap-3">
-            <span className="hidden rounded-full bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-100 md:inline-flex items-center gap-2">
-              <span className="text-xs">🚗</span>
-              Customer
-            </span>
+            <div className="hidden items-center gap-2 rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] text-slate-100 md:inline-flex">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span>Signed in</span>
+            </div>
             <button
               onClick={() => {
                 localStorage.removeItem('servsync_token');
@@ -174,9 +195,9 @@ export default function CustomerDashboard() {
                 localStorage.removeItem('servsync_user');
                 navigate('/login');
               }}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-500 bg-slate-100 px-4 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-white"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-500 bg-white/10 backdrop-blur bg-slate-100/60 px-4 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-white"
             >
-              Logout
+              <MdLogout size={16} /> Logout
             </button>
           </div>
         </div>
@@ -188,11 +209,12 @@ export default function CustomerDashboard() {
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
             Customer portal
           </p>
-          <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">
-            🚗 Car Wash Service
+          <h1 className="mt-2 text-2xl font-semibold text-slate-50 sm:text-3xl">
+            Car Wash Service Request
           </h1>
           <p className="mt-2 text-sm text-slate-300">
-            Generate a token and track your place in line in real time.
+            Submit your vehicle details, select a service package, and track your place in
+            line in real time.
           </p>
         </section>
 
@@ -201,7 +223,7 @@ export default function CustomerDashboard() {
           <section className="mb-5 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md text-xs">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-medium text-slate-100">
-                📊 Current queue status
+                <MdBarChart className="inline-block mr-1" /> Current queue status
               </p>
               <span className="rounded-full bg-slate-50/10 px-3 py-1 text-[11px] font-semibold text-slate-100">
                 {queueStatus.availableCount} operators available
@@ -240,8 +262,8 @@ export default function CustomerDashboard() {
                 ))}
             </div>
             {queueStatus.availableCount === 0 && (
-              <p className="mt-3 rounded-xl bg-slate-900 px-3 py-2 text-[11px] text-slate-200">
-                ⏳ All operators currently have full queues. Your request will be added
+              <p className="mt-3 rounded-xl bg-slate-900 px-3 py-2 text-[11px] text-slate-200 inline-flex items-center gap-1">
+                <MdTimer /> All operators currently have full queues. Your request will be added
                 to the next available operator.
               </p>
             )}
@@ -253,7 +275,7 @@ export default function CustomerDashboard() {
           <section className="mb-5 rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-4 shadow-md text-xs">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-medium text-slate-100">
-                📋 Your recent request
+                <MdAssignment className="inline-block mr-1" /> Your recent request
               </p>
               <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-[11px] font-semibold text-emerald-100">
                 Token {customerRecentTask.tokenId}
@@ -276,32 +298,55 @@ export default function CustomerDashboard() {
             <div className="mt-3">
               <p className="text-[11px] text-slate-300">Status</p>
               <p className="text-sm font-semibold text-slate-50">
-                {customerRecentTask.status === 'pending' && '⏳ Waiting for operator'}
-                {customerRecentTask.status === 'in-progress' && '⚙️ In progress'}
-                {customerRecentTask.status === 'completed' && '✅ Completed'}
+                    {customerRecentTask.status === 'pending' && 'Waiting for operator'}
+                {customerRecentTask.status === 'in-progress' && (
+                  <span className="inline-flex items-center gap-1">
+                    In progress
+                    {customerRecentTask.startedAt && (
+                      <span className="ml-2 text-[10px] text-sky-300">
+                        <MdTimer className="inline-block" />
+                        <LiveTimer
+                          start={customerRecentTask.startedAt}
+                          expectedMinutes={SERVICE_DURATIONS[customerRecentTask.service]}
+                          className="ml-1"
+                        />
+                      </span>
+                    )}
+                  </span>
+                )}
+                {customerRecentTask.status === 'completed' && 'Completed'}
               </p>
             </div>
             {customerRecentTask.assignedOperator && (
               <div className="mt-3 border-t border-emerald-500/30 pt-3">
                 <p className="text-[11px] text-slate-300">Assigned operator</p>
                 <p className="text-sm font-semibold text-emerald-200">
-                  👨‍🔧 {customerRecentTask.assignedOperator.name}
+                  <MdPerson className="inline-block mr-1" /> {customerRecentTask.assignedOperator.name}
                 </p>
+              </div>
+            )}
+            {customerRecentTask.startedAt && customerRecentTask.status === 'in-progress' && (
+              <div className="mt-3">
+                <p className="text-[11px] text-slate-300">Progress</p>
+                <LiveProgress
+                  start={customerRecentTask.startedAt}
+                  expectedMinutes={SERVICE_DURATIONS[customerRecentTask.service]}
+                />
               </div>
             )}
             {customerRecentTask.status === 'pending' && (
               <div className="mt-4 flex gap-2 text-[11px]">
                 <button
                   onClick={() => openEditModal(customerRecentTask)}
-                  className="flex-1 rounded-full bg-sky-500 px-3 py-2 font-semibold text-sky-950 hover:bg-sky-400"
+                  className="flex-1 rounded-full bg-white/10 backdrop-blur bg-sky-500/60 px-3 py-2 font-semibold text-sky-950 hover:bg-sky-400"
                 >
-                  ✏ Edit details
+                  <MdEdit size={16} /> Edit details
                 </button>
                 <button
                   onClick={() => handleDeleteTask(customerRecentTask._id)}
-                  className="flex-1 rounded-full bg-red-500/20 px-3 py-2 font-semibold text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/30"
+                  className="flex-1 rounded-full bg-white/10 backdrop-blur bg-red-500/40 px-3 py-2 font-semibold text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/30"
                 >
-                  🗑 Cancel request
+                  <MdDeleteOutline size={16} /> Cancel request
                 </button>
               </div>
             )}
@@ -560,7 +605,7 @@ export default function CustomerDashboard() {
                       Generating token...
                     </>
                   ) : (
-                    '🎫 Generate token'
+                    <><MdConfirmationNumber className="inline-block" /> Generate token</>
                   )}
                 </button>
               </form>
@@ -573,7 +618,7 @@ export default function CustomerDashboard() {
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
             <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-950 px-5 py-6 text-xs shadow-[0_30px_80px_rgba(0,0,0,0.75)]">
               <h2 className="mb-3 text-sm font-semibold text-slate-50">
-                ✏ Edit request
+                <MdEdit className="inline-block mr-1" /> Edit request
               </h2>
               <form onSubmit={handleEditTask} className="space-y-3">
                 <div>
@@ -657,16 +702,16 @@ export default function CustomerDashboard() {
                   <button
                     type="button"
                     onClick={() => setEditingTask(null)}
-                    className="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-semibold text-slate-200 hover:bg-slate-800"
+                    className="flex-1 rounded-xl border border-slate-700 bg-white/10 backdrop-blur bg-slate-900/60 px-3 py-2 font-semibold text-slate-200 hover:bg-slate-800"
                   >
-                    Cancel
+                    <MdClose size={16} /> Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={editLoading}
-                    className="flex-1 rounded-xl bg-indigo-500 px-3 py-2 font-semibold text-white hover:bg-indigo-400 disabled:opacity-60"
+                    className="flex-1 rounded-xl bg-white/10 backdrop-blur bg-indigo-500/60 px-3 py-2 font-semibold text-white hover:bg-indigo-400 disabled:opacity-60"
                   >
-                    {editLoading ? 'Updating...' : 'Save changes'}
+                    {editLoading ? 'Updating...' : <><MdCheck size={16} /> Save changes</>}
                   </button>
                 </div>
               </form>

@@ -13,8 +13,12 @@ const serviceRequestSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     assignedOperator: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     queuePosition: { type: Number }, // Position in operator's queue
-    startedAt: { type: Date }, // When task started
+    assignedAt: { type: Date }, // When operator claimed the task
+    expectedDurationMinutes: { type: Number, default: 0 }, // Planned work time
+    startedAt: { type: Date }, // When work actually began
     completedAt: { type: Date }, // When task was completed
+    workDurationMinutes: { type: Number, default: 0 }, // calculated on completion
+    delayMinutes: { type: Number, default: 0 }, // positive if finished late
     operatorNotes: { type: String } // Notes from operator
   },
   { timestamps: true }

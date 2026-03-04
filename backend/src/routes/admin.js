@@ -15,7 +15,15 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-// Get all operators with stats
+// Allow admin or operator (for limited, non-sensitive views)
+const adminOrOperator = (req, res, next) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'operator') {
+    return res.status(403).json({ message: 'Admin or operator access required' });
+  }
+  next();
+};
+
+// Get all operators with stats (admin only)
 router.get('/operators', adminOnly, async (req, res, next) => {
   try {
     const operators = await User.find({ role: 'operator' }).select('-passwordHash');
@@ -27,6 +35,31 @@ router.get('/operators', adminOnly, async (req, res, next) => {
         });
         return {
           ...op.toObject(),
+          tasksInProgress: inProgressCount
+        };
+      })
+    );
+    res.json(operatorsWithStats);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Lightweight operator list for assignment (admin + operators)
+router.get('/operators-lite', adminOrOperator, async (req, res, next) => {
+  try {
+    const operators = await User.find({ role: 'operator' }).select('-passwordHash');
+    const operatorsWithStats = await Promise.all(
+      operators.map(async (op) => {
+        const inProgressCount = await ServiceRequest.countDocuments({
+          assignedOperator: op._id,
+          status: 'in-progress'
+        });
+        return {
+          _id: op._id,
+          name: op.name,
+          email: op.email,
+          isActive: op.isActive,
           tasksInProgress: inProgressCount
         };
       })
@@ -147,7 +180,21 @@ router.get('/operators/:id/stats', adminOnly, async (req, res, next) => {
       .populate('createdBy', 'name email')
       .sort({ completedAt: -1 })
       .limit(50);
-    
+
+    // compute additional metrics
+    const totalDelay = completedTasks.reduce((sum, t) => sum + (t.delayMinutes || 0), 0);
+    const avgDelay = completedTasks.length ? totalDelay / completedTasks.length : 0;
+
+    const serviceCounts = {};
+    completedTasks.forEach((t) => {
+      serviceCounts[t.service] = (serviceCounts[t.service] || 0) + 1;
+    });
+
+    const queueCount = await ServiceRequest.countDocuments({
+      assignedOperator: req.params.id,
+      status: { $in: ['pending', 'in-progress'] }
+    });
+
     const stats = {
       operatorId: operator._id,
       name: operator.name,
@@ -158,7 +205,10 @@ router.get('/operators/:id/stats', adminOnly, async (req, res, next) => {
       totalRatings: operator.totalRatings,
       isActive: operator.isActive,
       inProgressTasks,
-      completedTasks
+      completedTasks,
+      avgDelayMinutes: avgDelay,
+      serviceCounts,
+      queueLength: queueCount
     };
     
     res.json(stats);

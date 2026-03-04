@@ -1,9 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import {
+  MdAdd,
+  MdCheck,
+  MdPerson,
+  MdBarChart,
+  MdTimer,
+  MdPlayArrow,
+  MdSettings,
+  MdConfirmationNumber,
+  MdBuild,
+  MdCalendarToday,
+  MdAssignment,
+  MdPeople,
+  MdPause,
+  MdDeleteOutline,
+  MdInbox,
+  MdHourglassEmpty,
+  MdStarBorder,
+  MdDirectionsCar,
+} from 'react-icons/md';
+import LiveTimer from '../components/LiveTimer';
+
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshMs, setRefreshMs] = useState(10000);
   const [operators, setOperators] = useState([]);
   const [completedTasks, setCompletedTasks] = useState([]);
   const [inProgressTasks, setInProgressTasks] = useState([]);
@@ -16,6 +40,8 @@ export default function AdminDashboard() {
     averageRating: 0,
     activeOperators: 0,
   });
+  const [notification, setNotification] = useState('');
+  const prevTotals = React.useRef({ pending: 0, inProgress: 0 });
   const [showAddOperator, setShowAddOperator] = useState(false);
   const [newOperator, setNewOperator] = useState({
     name: '',
@@ -34,9 +60,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 10000);
+    if (!autoRefresh) return undefined;
+    const interval = setInterval(fetchDashboardData, refreshMs);
     return () => clearInterval(interval);
-  }, []);
+  }, [autoRefresh, refreshMs]);
 
   const fetchDashboardData = async () => {
     try {
@@ -53,6 +80,17 @@ export default function AdminDashboard() {
       setInProgressTasks(inProgressRes.data || []);
       setPendingTasks(pendingRes.data || []);
       setStats(statsRes.data || {});
+      // simple notification: if new pending or in-progress count increased
+      if (prevTotals.current.pending < (pendingRes.data || []).length) {
+        setNotification('New task arrived in pending queue');
+      }
+      if (prevTotals.current.inProgress < (inProgressRes.data || []).length) {
+        setNotification('A task moved to in-progress');
+      }
+      prevTotals.current = {
+        pending: (pendingRes.data || []).length,
+        inProgress: (inProgressRes.data || []).length
+      };
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setErrorMessage('Failed to fetch dashboard data');
@@ -74,6 +112,8 @@ export default function AdminDashboard() {
   };
 
   const viewOperatorStats = async (operatorId) => {
+    // also clear previous stats when selecting new operator
+    setOperatorStats(null);
     try {
       const response = await client.get(`/admin/operators/${operatorId}/stats`);
       setOperatorStats(response.data);
@@ -154,13 +194,26 @@ export default function AdminDashboard() {
             </div>
           </div>
           <nav className="hidden items-center gap-6 text-xs font-medium text-slate-300 md:flex">
-            <button className="relative text-slate-50">
-              Home
-              <span className="absolute -bottom-1 left-0 h-[2px] w-6 rounded-full bg-slate-50" />
-            </button>
-            <button className="hover:text-slate-50">Analytics</button>
-            <button className="hover:text-slate-50">Operators</button>
-            <button className="hover:text-slate-50">Settings</button>
+            {[
+              { id: 'overview', label: 'Home' },
+              { id: 'analytics', label: 'Analytics' },
+              { id: 'operators', label: 'Operators' },
+              { id: 'settings', label: 'Settings' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`relative transition hover:text-slate-50 ${
+                  activeTab === t.id ? 'text-slate-50' : 'text-slate-300'
+                }`}
+              >
+                {t.label}
+                {activeTab === t.id && (
+                  <span className="absolute -bottom-1 left-0 h-[2px] w-6 rounded-full bg-slate-50" />
+                )}
+              </button>
+            ))}
           </nav>
           <div className="flex items-center gap-3">
             <span className="hidden rounded-full bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-100 md:inline-flex items-center gap-2">
@@ -182,7 +235,7 @@ export default function AdminDashboard() {
         <div className="mb-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/40">
-              <span className="text-xl">⚙️</span>
+              <MdSettings className="text-xl" />
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
@@ -197,7 +250,7 @@ export default function AdminDashboard() {
             onClick={() => setShowAddOperator(true)}
             className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 px-4 py-2 text-xs font-semibold text-emerald-950 shadow-[0_16px_40px_rgba(16,185,129,0.55)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_55px_rgba(16,185,129,0.75)]"
           >
-            <span className="text-base">+</span>
+            <MdAdd className="text-base" />
             <span>Add operator</span>
           </button>
         </div>
@@ -273,17 +326,20 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Tabs */}
+        {/* Primary navigation tabs */}
         <div className="mb-5 flex flex-wrap gap-2 rounded-full border border-slate-800 bg-slate-900/70 p-1 text-xs">
           {[
-            { id: 'overview', label: 'Overview', icon: '📊' },
-            { id: 'operators', label: 'Operators', icon: '👨‍💼' },
-            { id: 'completed', label: 'Completed', icon: '✅' },
-            { id: 'in-progress', label: 'In progress', icon: '⏳' },
-            { id: 'pending', label: 'Pending', icon: '⏸️' },
+            { id: 'overview', label: 'Home', icon: <MdBarChart size={16} /> },
+            { id: 'analytics', label: 'Analytics', icon: <MdBarChart size={16} /> },
+            { id: 'operators', label: 'Operators', icon: <MdPeople size={16} /> },
+            { id: 'completed', label: 'Completed', icon: <MdCheck size={16} /> },
+            { id: 'in-progress', label: 'In progress', icon: <MdTimer size={16} /> },
+            { id: 'pending', label: 'Pending', icon: <MdPlayArrow size={16} /> },
+            { id: 'settings', label: 'Settings', icon: <MdSettings size={16} /> },
           ].map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveTab(tab.id)}
               className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 transition ${
                 activeTab === tab.id
@@ -297,10 +353,89 @@ export default function AdminDashboard() {
           ))}
         </div>
 
+        {/* Operators quick filter */}
+        {activeTab === 'operators' && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <div className="w-full overflow-x-auto">
+              <div className="inline-flex gap-2 rounded-full border border-slate-800 bg-slate-900/60 p-1 text-xs">
+                {operators.map((op) => (
+                  <button
+                    key={op._id}
+                    type="button"
+                    onClick={() => viewOperatorStats(op._id)}
+                    className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 transition ${
+                      operatorStats?.operatorId === op._id
+                        ? 'bg-indigo-600/30 text-slate-50'
+                        : 'text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <MdPerson size={14} />
+                    <span>{op.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Operator inline performance */}
+        {activeTab === 'operators' && operatorStats && (
+          <section className="mb-5 rounded-2xl border border-slate-800 bg-white/5 backdrop-blur p-4 text-xs">
+            <h2 className="text-lg font-semibold text-slate-50">
+              {operatorStats.name} &ndash; performance
+            </h2>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-[11px] text-slate-400">Tasks completed</p>
+                <p className="text-xl font-semibold text-emerald-300">
+                  {operatorStats.tasksCompleted}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  In progress: {operatorStats.tasksInProgress} · queue length: {operatorStats.queueLength}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400">Average delay (min)</p>
+                <p className="text-xl font-semibold text-amber-300">
+                  {operatorStats.avgDelayMinutes?.toFixed(1) ?? 0}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-[11px] text-slate-400">Service mix</p>
+                <ul className="mt-1 list-disc list-inside text-slate-200">
+                  {Object.entries(operatorStats.serviceCounts || {}).map(([svc, cnt]) => (
+                    <li key={svc}>
+                      {svc}: {cnt}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400">Recent tasks</p>
+                <ul className="mt-1 text-slate-200">
+                  {operatorStats.completedTasks.slice(0, 5).map((t) => (
+                    <li key={t._id}>
+                      {t.customerName} &ndash; {t.service} ({new Date(t.completedAt).toLocaleTimeString()})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        )}
+
         {successMessage && (
           <div className="mb-4 flex items-center gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200">
-            <span>✓</span>
+            <MdCheck />
             <p>{successMessage}</p>
+          </div>
+        )}
+        {notification && (
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+            <MdTimer />
+            <p>{notification}</p>
           </div>
         )}
         {errorMessage && (
@@ -360,12 +495,129 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* ANALYTICS */}
+        {activeTab === 'analytics' && (
+          <section className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md">
+              <h3 className="mb-3 text-sm font-medium text-slate-100">
+                Workload distribution
+              </h3>
+              {(() => {
+                const completed = completedTasks.length;
+                const inProg = inProgressTasks.length;
+                const pending = pendingTasks.length;
+                const total = Math.max(1, completed + inProg + pending);
+                const rows = [
+                  { label: 'Completed', value: completed, color: 'bg-emerald-400' },
+                  { label: 'In progress', value: inProg, color: 'bg-sky-400' },
+                  { label: 'Pending', value: pending, color: 'bg-amber-300' },
+                ];
+                return (
+                  <div className="space-y-3 text-xs">
+                    {rows.map((r) => (
+                      <div key={r.label}>
+                        <div className="mb-1 flex items-center justify-between text-[11px] text-slate-300">
+                          <span>{r.label}</span>
+                          <span className="font-semibold text-slate-100">{r.value}</span>
+                        </div>
+                        <div className="h-2 w-full rounded bg-slate-800">
+                          <div
+                            className={`h-2 rounded ${r.color}`}
+                            style={{ width: `${(r.value / total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md">
+              <h3 className="mb-3 text-sm font-medium text-slate-100">
+                7‑day throughput
+              </h3>
+              {(() => {
+                const days = Array.from({ length: 7 }, (_, i) => {
+                  const d = new Date();
+                  d.setHours(0, 0, 0, 0);
+                  d.setDate(d.getDate() - (6 - i));
+                  return d;
+                });
+                const counts = days.map((d) => {
+                  const next = new Date(d);
+                  next.setDate(next.getDate() + 1);
+                  return completedTasks.filter((t) => {
+                    if (!t.completedAt) return false;
+                    const ts = new Date(t.completedAt).getTime();
+                    return ts >= d.getTime() && ts < next.getTime();
+                  }).length;
+                });
+                const max = Math.max(1, ...counts);
+                return (
+                  <div className="grid grid-cols-7 items-end gap-2">
+                    {counts.map((c, idx) => (
+                      <div key={String(idx)} className="text-center">
+                        <div className="h-24 rounded-xl bg-slate-950/60 p-1">
+                          <div
+                            className="w-full rounded-lg bg-indigo-400/80"
+                            style={{ height: `${(c / max) * 100}%` }}
+                            title={`${c} completed`}
+                          />
+                        </div>
+                        <div className="mt-1 text-[10px] text-slate-400">
+                          {days[idx].toLocaleDateString('en-US', { weekday: 'short' })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md md:col-span-2">
+              <h3 className="mb-3 text-sm font-medium text-slate-100">
+                Service mix (completed)
+              </h3>
+              {(() => {
+                const mix = {};
+                completedTasks.forEach((t) => {
+                  const key = t.service || 'unknown';
+                  mix[key] = (mix[key] || 0) + 1;
+                });
+                const entries = Object.entries(mix).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                const total = Math.max(1, entries.reduce((s, [, v]) => s + v, 0));
+                return entries.length === 0 ? (
+                  <p className="text-xs text-slate-400">No completed tasks yet.</p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {entries.map(([svc, cnt]) => (
+                      <div key={svc} className="rounded-xl bg-slate-950/60 px-3 py-3">
+                        <div className="mb-1 flex items-center justify-between text-[11px] text-slate-300">
+                          <span className="truncate">{svc}</span>
+                          <span className="font-semibold text-slate-100">{cnt}</span>
+                        </div>
+                        <div className="h-2 w-full rounded bg-slate-800">
+                          <div
+                            className="h-2 rounded bg-emerald-400/80"
+                            style={{ width: `${(cnt / total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </section>
+        )}
+
         {/* OPERATORS */}
         {activeTab === 'operators' && (
           <section className="mt-1">
             {operators.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 px-6 py-12 text-center text-slate-400">
-                <span className="mb-3 text-4xl">👥</span>
+                <MdPeople className="mb-3 text-4xl" />
                 <p className="text-sm font-medium text-slate-200">
                   No operators yet
                 </p>
@@ -425,23 +677,23 @@ export default function AdminDashboard() {
                     <div className="flex flex-wrap gap-2 text-[11px]">
                       <button
                         onClick={() => viewOperatorStats(operator._id)}
-                        className="inline-flex flex-1 items-center justify-center rounded-full bg-slate-800 px-3 py-1.5 text-slate-100 hover:bg-slate-700"
+                        className="inline-flex flex-1 items-center justify-center rounded-full bg-white/10 backdrop-blur bg-slate-800/60 px-3 py-1.5 text-slate-100 hover:bg-slate-700"
                       >
-                        📊 View stats
+                        <MdBarChart size={16} /> View stats
                       </button>
                       <button
                         onClick={() =>
                           toggleOperatorStatus(operator._id, operator.isActive)
                         }
-                        className="inline-flex flex-1 items-center justify-center rounded-full bg-sky-500/15 px-3 py-1.5 text-sky-200 ring-1 ring-sky-500/40 hover:bg-sky-500/25"
+                        className="inline-flex flex-1 items-center justify-center rounded-full bg-white/10 backdrop-blur bg-sky-500/40 px-3 py-1.5 text-sky-200 ring-1 ring-sky-500/40 hover:bg-sky-500/25"
                       >
-                        {operator.isActive ? '⏸ Pause' : '▶ Resume'}
+                        {operator.isActive ? <MdPause size={16} /> : <MdPlayArrow size={16} />} {operator.isActive ? 'Pause' : 'Resume'}
                       </button>
                       <button
                         onClick={() => deleteOperator(operator._id)}
-                        className="inline-flex flex-1 items-center justify-center rounded-full bg-red-500/15 px-3 py-1.5 text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/25"
+                        className="inline-flex flex-1 items-center justify-center rounded-full bg-white/10 backdrop-blur bg-red-500/40 px-3 py-1.5 text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/25"
                       >
-                        🗑 Remove
+                        <MdDeleteOutline size={16} /> Remove
                       </button>
                     </div>
                   </div>
@@ -451,15 +703,86 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* SETTINGS */}
+        {activeTab === 'settings' && (
+          <section className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md text-xs">
+              <h3 className="mb-3 text-sm font-medium text-slate-100">
+                Refresh & data
+              </h3>
+              <div className="space-y-3">
+                <label className="flex items-center justify-between gap-3 rounded-xl bg-slate-950/60 px-3 py-3">
+                  <span className="text-slate-200">Auto-refresh</span>
+                  <button
+                    type="button"
+                    onClick={() => setAutoRefresh((v) => !v)}
+                    className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                      autoRefresh
+                        ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/40'
+                        : 'bg-slate-800 text-slate-200 ring-1 ring-slate-700'
+                    }`}
+                  >
+                    {autoRefresh ? 'Enabled' : 'Disabled'}
+                  </button>
+                </label>
+
+                <div className="rounded-xl bg-slate-950/60 px-3 py-3">
+                  <p className="mb-2 text-slate-200">Refresh interval</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[5000, 10000, 30000].map((ms) => (
+                      <button
+                        key={ms}
+                        type="button"
+                        onClick={() => setRefreshMs(ms)}
+                        className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                          refreshMs === ms
+                            ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-500/40'
+                            : 'bg-slate-800 text-slate-200 ring-1 ring-slate-700 hover:bg-slate-700'
+                        }`}
+                      >
+                        {ms / 1000}s
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={fetchDashboardData}
+                      className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-semibold text-slate-200 ring-1 ring-slate-700 hover:bg-slate-700"
+                    >
+                      Refresh now
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md text-xs">
+              <h3 className="mb-3 text-sm font-medium text-slate-100">
+                Operational guidance
+              </h3>
+              <ul className="space-y-2 text-slate-300">
+                <li className="rounded-xl bg-slate-950/60 px-3 py-3">
+                  Use <span className="font-semibold text-slate-100">Pending</span> to assign unowned tasks.
+                </li>
+                <li className="rounded-xl bg-slate-950/60 px-3 py-3">
+                  Use <span className="font-semibold text-slate-100">In progress</span> to monitor active SLAs with live timers.
+                </li>
+                <li className="rounded-xl bg-slate-950/60 px-3 py-3">
+                  Review <span className="font-semibold text-slate-100">Analytics</span> for throughput and service mix trends.
+                </li>
+              </ul>
+            </div>
+          </section>
+        )}
+
         {/* COMPLETED */}
         {activeTab === 'completed' && (
           <section className="mt-1 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md">
             <h3 className="mb-3 text-sm font-medium text-slate-100">
-              ✅ Completed tasks
+              <MdCheck className="inline-block mr-1" /> Completed tasks
             </h3>
             {completedTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                <span className="mb-2 text-4xl">📭</span>
+                <MdInbox className="mb-2 text-4xl" />
                 <p className="text-xs">No completed tasks yet.</p>
               </div>
             ) : (
@@ -474,11 +797,18 @@ export default function AdminDashboard() {
                         {task.customerName}
                       </p>
                       <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-300">
-                        <span>🎫 {task.tokenId}</span>
-                        <span>🔧 {task.service}</span>
-                        <span>
-                          👨‍🔧 {task.assignedOperator?.name || 'Unassigned'}
-                        </span>
+                        <span className="inline-flex items-center gap-1"><MdConfirmationNumber className="inline-block" /> {task.tokenId}</span>
+                        <span className="inline-flex items-center gap-1"><MdBuild size={14} /> {task.service}</span>
+                        <span className="inline-flex items-center gap-1"><MdPerson size={14} /> {task.assignedOperator?.name || 'Unassigned'}</span>
+                        {task.startedAt && task.completedAt && (
+                          <span className="inline-flex items-center gap-1 text-amber-200">
+                            <MdTimer className="inline-block" />
+                            <LiveTimer start={task.startedAt} end={task.completedAt} className="ml-1" />
+                          </span>
+                        )}
+                        {task.delayMinutes > 0 && (
+                          <span className="text-red-300">delay {task.delayMinutes.toFixed(0)}m</span>
+                        )}
                       </div>
                     </div>
                     <p className="ml-3 text-[11px] text-emerald-200">
@@ -495,11 +825,11 @@ export default function AdminDashboard() {
         {activeTab === 'in-progress' && (
           <section className="mt-1 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md">
             <h3 className="mb-3 text-sm font-medium text-slate-100">
-              ⏳ In progress
+              <MdTimer className="inline-block mr-1" /> In progress
             </h3>
             {inProgressTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                <span className="mb-2 text-4xl">🎉</span>
+                <MdHourglassEmpty className="mb-2 text-4xl" />
                 <p className="text-xs">No tasks currently in progress.</p>
               </div>
             ) : (
@@ -515,15 +845,23 @@ export default function AdminDashboard() {
                           {task.customerName}
                         </p>
                         <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-300">
-                          <span>🎫 {task.tokenId}</span>
-                          <span>🚗 {task.vehicle}</span>
-                          <span>
-                            👨‍🔧 {task.assignedOperator?.name || 'Unassigned'}
-                          </span>
-                          <span>🛠 {task.service}</span>
+                          <span className="inline-flex items-center gap-1"><MdConfirmationNumber className="inline-block" /> {task.tokenId}</span>
+                          <span className="inline-flex items-center gap-1"><MdDirectionsCar size={14} /> {task.vehicle}</span>
+                          <span className="inline-flex items-center gap-1"><MdPerson size={14} /> {task.assignedOperator?.name || 'Unassigned'}</span>
+                          <span className="inline-flex items-center gap-1"><MdBuild size={14} /> {task.service}</span>
                         </div>
                       </div>
                       <span className="text-[11px] text-sky-200">Live</span>
+                      {task.startedAt && (
+                        <span className="ml-2 text-[10px] text-amber-200">
+                          <MdTimer className="inline-block" />
+                          <LiveTimer
+                            start={task.startedAt}
+                            expectedMinutes={task.expectedDurationMinutes}
+                            className="ml-1"
+                          />
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -536,11 +874,11 @@ export default function AdminDashboard() {
         {activeTab === 'pending' && (
           <section className="mt-1 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md">
             <h3 className="mb-3 text-sm font-medium text-slate-100">
-              ⏸️ Pending — not assigned
+              <MdPlayArrow className="inline-block mr-1 rotate-90" /> Pending — not assigned
             </h3>
             {pendingTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                <span className="mb-2 text-4xl">✨</span>
+                <MdStarBorder className="mb-2 text-4xl" />
                 <p className="text-xs">All caught up — no pending tasks.</p>
               </div>
             ) : (
@@ -555,11 +893,11 @@ export default function AdminDashboard() {
                         {task.customerName}
                       </p>
                       <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-900">
-                        <span>🎫 {task.tokenId}</span>
-                        <span>🚗 {task.vehicle}</span>
-                        <span>🔧 {task.service}</span>
-                        <span className="text-amber-900/80">
-                          📅 {formatDate(task.createdAt)}
+                        <span className="inline-flex items-center gap-1"><MdConfirmationNumber className="inline-block" /> {task.tokenId}</span>
+                        <span className="inline-flex items-center gap-1"><MdDirectionsCar size={14} /> {task.vehicle}</span>
+                        <span className="inline-flex items-center gap-1"><MdBuild size={14} /> {task.service}</span>
+                        <span className="text-amber-900/80 inline-flex items-center gap-1">
+                          <MdCalendarToday size={14} /> {formatDate(task.createdAt)}
                         </span>
                       </div>
                     </div>
@@ -567,9 +905,9 @@ export default function AdminDashboard() {
                       onClick={() =>
                         setAssignmentModal({ show: true, taskId: task._id })
                       }
-                      className="ml-3 inline-flex items-center rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] text-slate-100 ring-1 ring-slate-700 hover:bg-slate-800"
+                      className="ml-3 inline-flex items-center rounded-full bg-white/10 backdrop-blur bg-slate-900/60 px-3 py-1.5 text-[11px] text-slate-100 ring-1 ring-slate-700 hover:bg-slate-800"
                     >
-                      📋 Assign
+                      <MdAssignment /> Assign
                     </button>
                   </div>
                 ))}
@@ -577,9 +915,9 @@ export default function AdminDashboard() {
             )}
           </section>
         )}
+
       </div>
 
-      {/* Add operator modal */}
       {showAddOperator && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-950 px-5 py-6 shadow-[0_30px_80px_rgba(0,0,0,0.75)]">
@@ -773,7 +1111,7 @@ export default function AdminDashboard() {
                         <span>🎫 {task.tokenId}</span>
                         <span>🚗 {task.vehicle}</span>
                         <span>🛁 {task.service}</span>
-                        <span>📅 {formatDate(task.completedAt)}</span>
+                        <span className="inline-flex items-center gap-1"><MdCalendarToday size={14} /> {formatDate(task.completedAt)}</span>
                       </div>
                       {task.operatorNotes && (
                         <p className="mt-2 text-[11px] italic text-slate-300">

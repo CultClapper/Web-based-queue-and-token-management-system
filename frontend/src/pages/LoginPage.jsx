@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import client from '../api/client';
+import { MdLock } from 'react-icons/md';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -156,7 +157,7 @@ export default function LoginPage() {
               <div className="mt-auto space-y-4">
                 <div className="flex items-center gap-3 rounded-2xl bg-white/75 p-3 text-xs text-slate-800 backdrop-blur">
                   <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-white">
-                    <span>🔒</span>
+                    <MdLock size={20} />
                   </div>
                   <div>
                     <p className="font-semibold">Enterprise‑grade security</p>

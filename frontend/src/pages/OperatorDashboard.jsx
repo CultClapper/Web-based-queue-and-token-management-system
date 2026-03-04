@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
+// icons
+import { MdCheck, MdRefresh, MdDeleteOutline, MdPlayArrow, MdTimer, MdDirectionsCar, MdCleanHands, MdPhone, MdBusiness, MdCalendarToday, MdConfirmationNumber } from 'react-icons/md';
+import LiveTimer from '../components/LiveTimer';
+
+// expected durations for services (minutes)
+const SERVICE_DURATIONS = {
+  basic: 15,
+  standard: 30,
+  premium: 45,
+  detail: 60
+};
+
 
 export default function OperatorDashboardNew() {
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -11,6 +23,8 @@ export default function OperatorDashboardNew() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('queue');
   const [successMessage, setSuccessMessage] = useState('');
+  const [notification, setNotification] = useState('');
+  const prevCounts = React.useRef({ pending: 0, inProgress: 0 });
   const [operatorNotes, setOperatorNotes] = useState('');
   const [completeTaskId, setCompleteTaskId] = useState(null);
   const [reassignModal, setReassignModal] = useState({ show: false, taskId: null });
@@ -23,12 +37,14 @@ export default function OperatorDashboardNew() {
     fetchServiceRequests();
     fetchOperators();
     const interval = setInterval(fetchServiceRequests, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   const fetchOperators = async () => {
     try {
-      const response = await client.get('/admin/operators');
+      const response = await client.get('/admin/operators-lite');
       setOperators(response.data || []);
     } catch (error) {
       console.error('Error fetching operators:', error);
@@ -44,8 +60,21 @@ export default function OperatorDashboardNew() {
         client.get('/customer/requests/operator/completed-recent'),
         client.get('/customer/requests/operator/completed-history')
       ]);
-      setPendingRequests(pendingRes.data || []);
-      setInProgressRequests(inProgressRes.data || []);
+      const pending = pendingRes.data || [];
+      const inProg = inProgressRes.data || [];
+      // trigger notification if counts jump
+      if (prevCounts.current.pending < pending.length) {
+        setNotification('New pending task arrived');
+        setTimeout(() => setNotification(''), 3500);
+      }
+      if (prevCounts.current.inProgress < inProg.length) {
+        setNotification('A task entered in‑progress');
+        setTimeout(() => setNotification(''), 3500);
+      }
+      prevCounts.current = { pending: pending.length, inProgress: inProg.length };
+
+      setPendingRequests(pending);
+      setInProgressRequests(inProg);
       setCompletedRequests(completedRes.data || []);
       setRecentCompletedRequests(recentRes.data || []);
       setCompletedHistory(historyRes.data || []);
@@ -61,10 +90,23 @@ export default function OperatorDashboardNew() {
       const response = await client.patch(`/customer/requests/${requestId}/accept`);
       setPendingRequests(pendingRequests.filter(r => r._id !== requestId));
       setInProgressRequests([...inProgressRequests, response.data]);
-      setSuccessMessage('✓ Task accepted successfully!');
+      setSuccessMessage('Task claimed — click ▶️ to start timer');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Error accepting task:', error);
+    }
+  };
+
+  const startTask = async (requestId) => {
+    try {
+      const response = await client.patch(`/customer/requests/${requestId}/start`);
+      setInProgressRequests(
+        inProgressRequests.map(r => (r._id === requestId ? response.data : r))
+      );
+      setSuccessMessage('Timer started');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      console.error('Error starting task:', error);
     }
   };
 
@@ -132,31 +174,46 @@ export default function OperatorDashboardNew() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
-      {/* Global navigation */}
-      <header className="sticky top-0 z-30 bg-gradient-to-r from-blue-900 via-indigo-900 to-purple-900 text-slate-50">
+      {/* Global navigation / brand */}
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-500 text-sm font-bold shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-xs font-semibold tracking-[0.15em] text-white shadow-lg">
               SS
             </div>
             <div className="leading-tight">
               <p className="text-sm font-semibold text-slate-50">ServSync</p>
-              <p className="text-[11px] text-slate-400">Operator Workspace</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                Operator Control Center
+              </p>
             </div>
           </div>
-          <nav className="hidden items-center gap-5 text-xs font-medium text-slate-300 md:flex">
-            <button className="relative text-slate-50">
-              Home
-              <span className="absolute -bottom-1 left-0 h-[2px] w-6 rounded-full bg-slate-50" />
-            </button>
-            <button className="hover:text-slate-50">Queue</button>
-            <button className="hover:text-slate-50">History</button>
+          <nav className="hidden items-center gap-6 text-xs font-medium text-slate-300 md:flex">
+            {[
+              { id: 'queue', label: 'Queue' },
+              { id: 'recent', label: 'Recent' },
+              { id: 'history', label: 'History' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`relative transition hover:text-slate-50 ${
+                  activeTab === t.id ? 'text-slate-50' : 'text-slate-300'
+                }`}
+              >
+                {t.label}
+                {activeTab === t.id && (
+                  <span className="absolute -bottom-1 left-0 h-[2px] w-6 rounded-full bg-indigo-400" />
+                )}
+              </button>
+            ))}
           </nav>
           <div className="flex items-center gap-3">
-            <span className="hidden rounded-full bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-100 md:inline-flex items-center gap-2">
-              <span className="text-xs">🧰</span>
-              Operator
-            </span>
+            <div className="hidden items-center gap-2 rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] text-slate-100 md:inline-flex">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span>Operator online</span>
+            </div>
             <button
               onClick={() => {
                 localStorage.removeItem('servsync_token');
@@ -173,42 +230,70 @@ export default function OperatorDashboardNew() {
       </header>
 
       <div className="mx-auto flex max-w-6xl flex-col px-4 pb-10 pt-6 lg:px-6 lg:pt-8">
-        {/* Header */}
-        <section className="mb-6 flex items-center justify-between gap-4">
+        {/* Header + KPIs */}
+        <section className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-              Operator workspace
+              Live operations overview
             </p>
             <h1 className="mt-1 text-xl font-semibold text-slate-50 sm:text-2xl">
-              📦 Live Service Queue
+              Service Queue Management
             </h1>
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-300">
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1">
-                🎯 Pending: {pendingRequests.length}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1">
-                ⚙️ Active: {inProgressRequests.length}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1">
-                ✅ Completed: {completedRequests.length}
-              </span>
+            <p className="mt-1 max-w-xl text-xs text-slate-400">
+              Monitor incoming requests, active work, and completion history in a single
+              consolidated workspace.
+            </p>
+          </div>
+          <div className="grid w-full gap-3 text-[11px] text-slate-200 sm:grid-cols-3 md:w-auto">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
+                Pending
+              </p>
+              <p className="mt-1 text-lg font-semibold text-amber-300">
+                {pendingRequests.length}
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Awaiting acceptance</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
+                In progress
+              </p>
+              <p className="mt-1 text-lg font-semibold text-sky-300">
+                {inProgressRequests.length}
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Currently active</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
+                30‑day throughput
+              </p>
+              <p className="mt-1 text-lg font-semibold text-emerald-300">
+                {recentCompletedRequests.length}
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Completed in last month</p>
             </div>
           </div>
         </section>
 
         {successMessage && (
           <div className="mb-4 flex items-center gap-2 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-200">
-            <span>✓</span>
+            <span><MdCheck /></span>
             <p>{successMessage}</p>
+          </div>
+        )}
+        {notification && (
+          <div className="mb-4 flex items-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-200">
+            <span><MdTimer /></span>
+            <p>{notification}</p>
           </div>
         )}
 
         {/* Tabs */}
         <div className="mb-5 flex flex-wrap gap-2 rounded-full border border-slate-800 bg-slate-900/70 p-1 text-xs">
           {[
-            { id: 'queue', label: 'Queue', icon: '📋' },
-            { id: 'recent', label: 'Recent month', icon: '⏰' },
-            { id: 'history', label: 'Year history', icon: '📅' },
+            { id: 'queue', label: 'Queue', icon: '' },
+            { id: 'recent', label: 'Recent month', icon: '' },
+            { id: 'history', label: 'Year history', icon: '' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -219,7 +304,6 @@ export default function OperatorDashboardNew() {
                   : 'text-slate-300 hover:bg-slate-800'
               }`}
             >
-              <span>{tab.icon}</span>
               <span>{tab.label}</span>
             </button>
           ))}
@@ -231,9 +315,9 @@ export default function OperatorDashboardNew() {
             {/* Sub-navigation for queue views */}
             <div className="mb-4 inline-flex rounded-full bg-slate-950/70 p-1 text-[11px]">
               {[
-                { id: 'pending', label: 'Pending', icon: '⏳' },
-                { id: 'inProgress', label: 'In progress', icon: '⚙️' },
-                { id: 'recent', label: 'Recently done', icon: '✅' },
+                { id: 'pending', label: 'Pending', icon: <MdTimer size={16} /> },
+                { id: 'inProgress', label: 'In progress', icon: <MdPlayArrow size={16} /> },
+                { id: 'recent', label: 'Recently done', icon: <MdCheck size={16} /> },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -269,7 +353,7 @@ export default function OperatorDashboardNew() {
                     {pendingRequests.slice(0, 20).map((request) => (
                       <div
                         key={request._id}
-                        className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-3"
+                        className="rounded-xl border border-slate-700 bg-white/5 backdrop-blur px-3 py-3"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -282,31 +366,31 @@ export default function OperatorDashboardNew() {
                           </div>
                         </div>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-200">
-                          <span>🚗 {request.vehicle}</span>
-                          <span>🛁 {request.service}</span>
-                          <span>📱 {request.phone}</span>
-                          <span>🏢 {request.company}</span>
+                          <span className="inline-flex items-center gap-1"><MdDirectionsCar size={14} /> {request.vehicle}</span>
+                          <span className="inline-flex items-center gap-1"><MdCleanHands size={14} /> {request.service}</span>
+                          <span className="inline-flex items-center gap-1"><MdPhone size={14} /> {request.phone}</span>
+                          <span className="inline-flex items-center gap-1"><MdBusiness size={14} /> {request.company}</span>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1 text-[11px]">
                           <button
                             onClick={() => acceptTask(request._id)}
-                            className="flex-1 rounded-full bg-emerald-500 px-2 py-1 font-semibold text-emerald-950 hover:bg-emerald-400"
+                            className="flex-1 rounded-full bg-white/10 backdrop-blur bg-emerald-500/60 px-2 py-1 font-semibold text-emerald-950 hover:bg-emerald-400"
                           >
-                            ✓ Accept
+                            <MdCheck size={18} /> Accept
                           </button>
                           <button
                             onClick={() =>
                               setReassignModal({ show: true, taskId: request._id })
                             }
-                            className="flex-1 rounded-full bg-amber-500/20 px-2 py-1 font-semibold text-amber-100 ring-1 ring-amber-500/40 hover:bg-amber-500/30"
+                            className="flex-1 rounded-full bg-white/10 backdrop-blur bg-amber-500/40 px-2 py-1 font-semibold text-amber-100 ring-1 ring-amber-500/40 hover:bg-amber-500/30"
                           >
-                            ↗ Reassign
+                            <MdRefresh size={18} /> Reassign
                           </button>
                           <button
                             onClick={() => deleteTask(request._id)}
-                            className="flex-1 rounded-full bg-red-500/20 px-2 py-1 font-semibold text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/30"
+                            className="flex-1 rounded-full bg-white/10 backdrop-blur bg-red-500/40 px-2 py-1 font-semibold text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/30"
                           >
-                            🗑 Delete
+                            <MdDeleteOutline size={18} /> Delete
                           </button>
                         </div>
                       </div>
@@ -320,7 +404,7 @@ export default function OperatorDashboardNew() {
             {queueView === 'inProgress' && (
               <div className="rounded-2xl border border-sky-400/40 bg-slate-900/80 p-3 shadow-lg">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-medium text-sky-100">⚙️ In progress</p>
+                  <p className="text-xs font-medium text-sky-100"><MdPlayArrow className="inline-block" /> In progress</p>
                   <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
                     {inProgressRequests.length}
                   </span>
@@ -335,7 +419,7 @@ export default function OperatorDashboardNew() {
                     {inProgressRequests.slice(0, 20).map((request) => (
                       <div
                         key={request._id}
-                        className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-3"
+                        className="rounded-xl border border-slate-700 bg-white/5 backdrop-blur px-3 py-3"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -345,34 +429,51 @@ export default function OperatorDashboardNew() {
                             <p className="mt-0.5 text-[11px] text-sky-200">
                               In progress
                             </p>
+                            {request.startedAt && (
+                              <div className="mt-1 text-[11px] text-amber-200">
+                                <MdTimer className="inline-block mr-1" />
+                                <LiveTimer
+                                  start={request.startedAt}
+                                  expectedMinutes={SERVICE_DURATIONS[request.service]}
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-200">
-                          <span>🚗 {request.vehicle}</span>
-                          <span>🛁 {request.service}</span>
-                          <span>📱 {request.phone}</span>
-                          <span>🏢 {request.company}</span>
+                          <span className="inline-flex items-center gap-1"><MdDirectionsCar size={14} /> {request.vehicle}</span>
+                          <span className="inline-flex items-center gap-1"><MdCleanHands size={14} /> {request.service}</span>
+                          <span className="inline-flex items-center gap-1"><MdPhone size={14} /> {request.phone}</span>
+                          <span className="inline-flex items-center gap-1"><MdBusiness size={14} /> {request.company}</span>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1 text-[11px]">
+                          {!request.startedAt && (
+                            <button
+                              onClick={() => startTask(request._id)}
+                              className="flex-none rounded-full bg-white/10 backdrop-blur bg-sky-500/60 px-2 py-1 font-semibold text-white hover:bg-sky-400"
+                            >
+                              <MdPlayArrow size={18} /> Start
+                            </button>
+                          )}
                           <button
                             onClick={() => setCompleteTaskId(request._id)}
-                            className="flex-1 rounded-full bg-emerald-500 px-2 py-1 font-semibold text-emerald-950 hover:bg-emerald-400"
+                            className="flex-1 rounded-full bg-white/10 backdrop-blur bg-emerald-500/60 px-2 py-1 font-semibold text-emerald-950 hover:bg-emerald-400"
                           >
-                            ✓ Complete
+                            <MdCheck size={18} /> Complete
                           </button>
                           <button
                             onClick={() =>
                               setReassignModal({ show: true, taskId: request._id })
                             }
-                            className="flex-1 rounded-full bg-amber-500/20 px-2 py-1 font-semibold text-amber-100 ring-1 ring-amber-500/40 hover:bg-amber-500/30"
+                            className="flex-1 rounded-full bg-white/10 backdrop-blur bg-amber-500/40 px-2 py-1 font-semibold text-amber-100 ring-1 ring-amber-500/40 hover:bg-amber-500/30"
                           >
-                            ↗ Reassign
+                            <MdRefresh size={18} /> Reassign
                           </button>
                           <button
                             onClick={() => deleteTask(request._id)}
-                            className="flex-1 rounded-full bg-red-500/20 px-2 py-1 font-semibold text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/30"
+                            className="flex-1 rounded-full bg-white/10 backdrop-blur bg-red-500/40 px-2 py-1 font-semibold text-red-200 ring-1 ring-red-500/40 hover:bg-red-500/30"
                           >
-                            🗑 Delete
+                            <MdDeleteOutline size={18} /> Delete
                           </button>
                         </div>
                       </div>
@@ -457,10 +558,10 @@ export default function OperatorDashboardNew() {
                           {request.customerName}
                         </p>
                         <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-200">
-                          <span>🎫 {request.tokenId}</span>
-                          <span>🚗 {request.vehicle}</span>
-                          <span>🛁 {request.service}</span>
-                          <span>📅 {formatDate(request.completedAt)}</span>
+                          <span className="inline-flex items-center gap-1"><MdTicket className="inline-block" /> {request.tokenId}</span>
+                          <span className="inline-flex items-center gap-1"><MdDirectionsCar size={14} /> {request.vehicle}</span>
+                          <span className="inline-flex items-center gap-1"><MdCleanHands size={14} /> {request.service}</span>
+                          <span className="inline-flex items-center gap-1"><MdCalendarToday size={14} /> {formatDate(request.completedAt)}</span>
                         </div>
                       </div>
                       <span className="text-[11px] text-emerald-200">✓ Done</span>
@@ -482,7 +583,7 @@ export default function OperatorDashboardNew() {
           <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-md text-xs">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-medium text-slate-100">
-                📅 Last 12 months — completion history
+                <MdCalendarToday className="inline-block mr-1" /> Last 12 months — completion history
               </p>
               <span className="rounded-full bg-slate-50/10 px-3 py-1 text-[11px] font-semibold text-slate-100">
                 {completedHistory.length} total
@@ -506,10 +607,10 @@ export default function OperatorDashboardNew() {
                           {request.customerName}
                         </p>
                         <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-200">
-                          <span>🎫 {request.tokenId}</span>
-                          <span>🚗 {request.vehicle}</span>
-                          <span>🛁 {request.service}</span>
-                          <span>📅 {formatDate(request.completedAt)}</span>
+                          <span className="inline-flex items-center gap-1"><MdTicket className="inline-block" /> {request.tokenId}</span>
+                          <span className="inline-flex items-center gap-1"><MdDirectionsCar size={14} /> {request.vehicle}</span>
+                          <span className="inline-flex items-center gap-1"><MdCleanHands size={14} /> {request.service}</span>
+                          <span className="inline-flex items-center gap-1"><MdCalendarToday size={14} /> {formatDate(request.completedAt)}</span>
                         </div>
                       </div>
                       <span className="text-[11px] text-emerald-200">✓ Done</span>
