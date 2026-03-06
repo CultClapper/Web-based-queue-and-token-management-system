@@ -4,6 +4,7 @@ import client from '../api/client';
 // icons
 import { MdCheck, MdRefresh, MdDeleteOutline, MdPlayArrow, MdTimer, MdDirectionsCar, MdCleanHands, MdPhone, MdBusiness, MdCalendarToday, MdConfirmationNumber } from 'react-icons/md';
 import LiveTimer from '../components/LiveTimer';
+import Navbar from '../components/Navbar';
 
 // expected durations for services (minutes)
 const SERVICE_DURATIONS = {
@@ -174,60 +175,16 @@ export default function OperatorDashboardNew() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
-      {/* Global navigation / brand */}
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-xs font-semibold tracking-[0.15em] text-white shadow-lg">
-              SS
-            </div>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold text-slate-50">ServSync</p>
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                Operator Control Center
-              </p>
-            </div>
-          </div>
-          <nav className="hidden items-center gap-6 text-xs font-medium text-slate-300 md:flex">
-            {[
-              { id: 'queue', label: 'Queue' },
-              { id: 'recent', label: 'Recent' },
-              { id: 'history', label: 'History' },
-            ].map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setActiveTab(t.id)}
-                className={`relative transition hover:text-slate-50 ${
-                  activeTab === t.id ? 'text-slate-50' : 'text-slate-300'
-                }`}
-              >
-                {t.label}
-                {activeTab === t.id && (
-                  <span className="absolute -bottom-1 left-0 h-[2px] w-6 rounded-full bg-indigo-400" />
-                )}
-              </button>
-            ))}
-          </nav>
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] text-slate-100 md:inline-flex">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              <span>Operator online</span>
-            </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem('servsync_token');
-                localStorage.removeItem('servsync_role');
-                localStorage.removeItem('servsync_user');
-                navigate('/login');
-              }}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-500 bg-slate-100 px-4 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-white"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
+      <Navbar
+        role="Operator"
+        tabs={[
+          { id: 'queue', label: 'Queue' },
+          { id: 'recent', label: 'Recent' },
+          { id: 'history', label: 'History' },
+        ]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       <div className="mx-auto flex max-w-6xl flex-col px-4 pb-10 pt-6 lg:px-6 lg:pt-8">
         {/* Header + KPIs */}
@@ -287,27 +244,6 @@ export default function OperatorDashboardNew() {
             <p>{notification}</p>
           </div>
         )}
-
-        {/* Tabs */}
-        <div className="mb-5 flex flex-wrap gap-2 rounded-full border border-slate-800 bg-slate-900/70 p-1 text-xs">
-          {[
-            { id: 'queue', label: 'Queue', icon: '' },
-            { id: 'recent', label: 'Recent month', icon: '' },
-            { id: 'history', label: 'Year history', icon: '' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 transition ${
-                activeTab === tab.id
-                  ? 'bg-slate-50 text-slate-900 shadow-sm'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </div>
 
         {/* QUEUE TAB */}
         {activeTab === 'queue' && (
@@ -558,7 +494,7 @@ export default function OperatorDashboardNew() {
                           {request.customerName}
                         </p>
                         <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-200">
-                          <span className="inline-flex items-center gap-1"><MdTicket className="inline-block" /> {request.tokenId}</span>
+                          <span className="inline-flex items-center gap-1"><MdConfirmationNumber className="inline-block" /> {request.tokenId}</span>
                           <span className="inline-flex items-center gap-1"><MdDirectionsCar size={14} /> {request.vehicle}</span>
                           <span className="inline-flex items-center gap-1"><MdCleanHands size={14} /> {request.service}</span>
                           <span className="inline-flex items-center gap-1"><MdCalendarToday size={14} /> {formatDate(request.completedAt)}</span>
@@ -607,7 +543,7 @@ export default function OperatorDashboardNew() {
                           {request.customerName}
                         </p>
                         <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-200">
-                          <span className="inline-flex items-center gap-1"><MdTicket className="inline-block" /> {request.tokenId}</span>
+                          <span className="inline-flex items-center gap-1"><MdConfirmationNumber className="inline-block" /> {request.tokenId}</span>
                           <span className="inline-flex items-center gap-1"><MdDirectionsCar size={14} /> {request.vehicle}</span>
                           <span className="inline-flex items-center gap-1"><MdCleanHands size={14} /> {request.service}</span>
                           <span className="inline-flex items-center gap-1"><MdCalendarToday size={14} /> {formatDate(request.completedAt)}</span>

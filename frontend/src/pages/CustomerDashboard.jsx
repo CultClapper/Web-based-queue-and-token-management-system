@@ -4,6 +4,7 @@ import client from '../api/client';
 import { MdTimer, MdCheck, MdPlayArrow, MdBarChart, MdAssignment, MdConfirmationNumber, MdPerson, MdEdit, MdDeleteOutline, MdClose, MdLogout } from 'react-icons/md';
 import LiveTimer from '../components/LiveTimer';
 import LiveProgress from '../components/LiveProgress';
+import Navbar from '../components/Navbar';
 
 const SERVICE_DURATIONS = {
   basic: 15,
@@ -161,47 +162,14 @@ export default function CustomerDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
-      {/* Global navigation / brand */}
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-xs font-semibold tracking-[0.15em] text-white shadow-lg">
-              SS
-            </div>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold text-slate-50">ServSync</p>
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                Customer Portal
-              </p>
-            </div>
-          </div>
-          <nav className="hidden items-center gap-6 text-xs font-medium text-slate-300 md:flex">
-            <span className="relative text-slate-50">
-              Overview
-              <span className="absolute -bottom-1 left-0 h-[2px] w-6 rounded-full bg-indigo-400" />
-            </span>
-            <span className="hover:text-slate-50">Services</span>
-            <span className="hover:text-slate-50">Support</span>
-          </nav>
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] text-slate-100 md:inline-flex">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              <span>Signed in</span>
-            </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem('servsync_token');
-                localStorage.removeItem('servsync_role');
-                localStorage.removeItem('servsync_user');
-                navigate('/login');
-              }}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-500 bg-white/10 backdrop-blur bg-slate-100/60 px-4 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-white"
-            >
-              <MdLogout size={16} /> Logout
-            </button>
-          </div>
-        </div>
-      </header>
+      <Navbar
+        role="Customer"
+        tabs={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'services', label: 'Services' },
+          { id: 'support', label: 'Support' },
+        ]}
+      />
 
       <div className="mx-auto max-w-4xl px-4 pb-10 pt-6 lg:px-6 lg:pt-8">
         {/* Header */}
